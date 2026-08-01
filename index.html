@@ -69,7 +69,7 @@
     }
     .loading { font-size: 1.1rem; color: #666; }
 
-    /* 💡 카카오톡 우측 하단 가리키는 안내 레이어 팝업 */
+    /* 카카오톡 우측 하단 가리키는 안내 레이어 팝업 */
     #kakaotalk-notice {
       display: none;
       position: fixed;
@@ -163,6 +163,7 @@
     }
   }
 
+  // TTS 음성 출력
   function speakText(text, callback) {
     try {
       if ('speechSynthesis' in window) {
@@ -183,7 +184,7 @@
         utterance.onerror = safeCallback;
 
         window.speechSynthesis.speak(utterance);
-        setTimeout(safeCallback, 2000);
+        setTimeout(safeCallback, 4000); // 보기가 길어질 수 있어 타임아웃을 4초로 확장
       } else if (callback) {
         callback();
       }
@@ -304,6 +305,8 @@
       const target = pokemons[0];
       currentAnswer = target.name;
 
+      const shuffledOptions = [...pokemons].sort(() => Math.random() - 0.5);
+
       const imgElem = document.getElementById('pokemon-img');
       imgElem.src = target.img;
       
@@ -311,7 +314,11 @@
         document.getElementById('loading').style.display = 'none';
         imgElem.style.display = 'block';
 
-        speakText("다음 포켓몬의 이름은 뭘까요?");
+        // 💡 4지선다 보기를 포함해서 읽어주는 음성 문장 생성
+        const optionNames = shuffledOptions.map((p, i) => `${i + 1}번 ${p.name}`).join(', ');
+        const speakSpeech = `다음 포켓몬의 이름은 뭘까요? ${optionNames}`;
+
+        speakText(speakSpeech);
         startTimer();
         isQuizLoading = false;
       };
@@ -320,14 +327,12 @@
         isQuizLoading = false;
         setTimeout(loadQuiz, 500);
       };
-
-      const shuffledOptions = [...pokemons].sort(() => Math.random() - 0.5);
       
       optionsContainer.innerHTML = '';
-      shuffledOptions.forEach(p => {
+      shuffledOptions.forEach((p, idx) => {
         const btn = document.createElement('button');
         btn.className = 'opt-btn';
-        btn.innerText = p.name;
+        btn.innerText = `${idx + 1}. ${p.name}`;
         btn.onclick = () => checkAnswer(p.name);
         optionsContainer.appendChild(btn);
       });
@@ -350,10 +355,10 @@
       score += 10;
       document.getElementById('score').innerText = score;
       msgElem.style.color = '#2e7d32';
-      msgElem.innerText = "정답! 역시 둥둥지군! 🎉";
+      msgElem.innerText = "정답! 역시 둥둥지네! 🎉";
       
       playCheerSound();
-      speakText("정답! 역시 둥둥지군!", () => {
+      speakText("정답! 역시 둥둥지네!", () => {
         setTimeout(loadQuiz, 800);
       });
     } else {
