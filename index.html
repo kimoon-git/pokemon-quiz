@@ -286,7 +286,7 @@
       score += 10;
       document.getElementById('score').innerText = score;
       msgElem.style.color = '#2e7d32';
-      msgElem.innerText = "정답입니다! 🎉";
+      msgElem.innerText = "정답입니다! 역시 둥둥지 대단하군!! 🎉";
       
       playCheerSound();
       speakText("정답입니다!", () => {
@@ -294,7 +294,7 @@
       });
     } else {
       msgElem.style.color = '#c62828';
-      msgElem.innerText = `틀렸습니다! (정답: ${currentAnswer})`;
+      msgElem.innerText = `아니!! 둥둥지도 모르다니.. (정답: ${currentAnswer})`;
       
       speakText(`아쉬워요! 정답은 ${currentAnswer}입니다.`);
       document.getElementById('next-btn').style.display = 'block';
