@@ -81,11 +81,14 @@
   let score = 0;
   let currentAnswer = "";
 
+  // 썬&문 전국대도감 기준 포켓몬 수 (1 ~ 802번)
+  const MAX_POKEMON_ID = 802;
+
   async function getPokemonData(id) {
-    // 이미지 추출 (고화질 아트워크)
+    // 고화질 아트워크 이미지 URL
     const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
     
-    // 한국어 이름 추출
+    // 한국어 이름 정보 요청
     const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
     const data = await res.json();
     const nameEntry = data.names.find(n => n.language.name === 'ko');
@@ -98,29 +101,29 @@
   }
 
   async function loadQuiz() {
-    // Reset UI
+    // 화면 초기화
     document.getElementById('loading').style.display = 'block';
     document.getElementById('pokemon-img').style.display = 'none';
     document.getElementById('options').innerHTML = '';
     document.getElementById('message').innerText = '';
     document.getElementById('next-btn').style.display = 'none';
 
-    // 1~1025세대 무작위 4마리 ID 추출
+    // 1번부터 802번 사이에서 무작위 4마리 ID 추출
     const randomIds = [];
     while (randomIds.length < 4) {
-      const rand = Math.floor(Math.random() * 1025) + 1;
+      const rand = Math.floor(Math.random() * MAX_POKEMON_ID) + 1;
       if (!randomIds.includes(rand)) randomIds.push(rand);
     }
 
     try {
-      // 4마리 데이터 비동기 병렬 요청
+      // 4마리 데이터 동시에 로딩
       const pokemons = await Promise.all(randomIds.map(id => getPokemonData(id)));
       
-      // 첫 번째 포켓몬을 정답으로 지정
+      // 첫 번째 포켓몬을 정답으로 설정
       const target = pokemons[0];
       currentAnswer = target.name;
 
-      // 이미지 세팅
+      // 이미지 출력 설정
       const imgElem = document.getElementById('pokemon-img');
       imgElem.src = target.img;
       imgElem.onload = () => {
@@ -128,10 +131,10 @@
         imgElem.style.display = 'block';
       };
 
-      // 보기를 무작위로 섞기
+      // 4개 선택지 무작위 섞기
       const shuffledOptions = [...pokemons].sort(() => Math.random() - 0.5);
 
-      // 보기 버튼 생성
+      // 선택지 버튼 생성
       const optionsContainer = document.getElementById('options');
       shuffledOptions.forEach(p => {
         const btn = document.createElement('button');
@@ -164,7 +167,7 @@
     document.getElementById('next-btn').style.display = 'block';
   }
 
-  // 첫 게임 실행
+  // 게임 처음 시작
   loadQuiz();
 </script>
 </body>
