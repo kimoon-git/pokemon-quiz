@@ -203,7 +203,6 @@
     stopTimer();
     window.speechSynthesis.cancel();
 
-    // 화면 초기화
     document.getElementById('loading').style.display = 'block';
     document.getElementById('pokemon-img').style.display = 'none';
     document.getElementById('options').innerHTML = '';
@@ -218,7 +217,12 @@
     }
 
     try {
-      const pokemons = await Promise.all(randomIds.map(id => getPokemonData(id)));
+      // 4개 요청 중 에러 발생 시 재시도 처리
+      const pokemons = [];
+      for (const id of randomIds) {
+        const p = await getPokemonData(id);
+        pokemons.push(p);
+      }
       
       const target = pokemons[0];
       currentAnswer = target.name;
@@ -229,10 +233,13 @@
         document.getElementById('loading').style.display = 'none';
         imgElem.style.display = 'block';
 
-        // 1. 문제 출제 음성
         speakText("다음 포켓몬의 이름은 뭘까요?");
-        // 2. 타이머 및 초시계 소리 시작
         startTimer();
+      };
+
+      // 이미지 로드 실패 대비
+      imgElem.onerror = () => {
+        loadQuiz(); // 실패 시 다른 문제로 재시도
       };
 
       const shuffledOptions = [...pokemons].sort(() => Math.random() - 0.5);
@@ -247,10 +254,11 @@
       });
 
     } catch (err) {
-      document.getElementById('loading').innerText = "데이터 로딩 실패. 다시 시도해 주세요.";
+      document.getElementById('loading').innerText = "로딩 실패. 다시 불러오는 중...";
+      setTimeout(loadQuiz, 1500); // 실패 시 1.5초 후 자동 재시도
     }
   }
-
+'
   function checkAnswer(selectedName) {
     stopTimer(); // 타이머 멈춤
     const btns = document.querySelectorAll('.opt-btn');
