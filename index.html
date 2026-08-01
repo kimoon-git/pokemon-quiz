@@ -94,6 +94,7 @@
   let timerInterval = null;
   let timeLeft = 10;
   let audioCtx = null;
+  let currentAudio = null;
 
   // 7세대(썬&문) 전국대도감 기준 802마리
   const MAX_POKEMON_ID = 802;
@@ -112,25 +113,31 @@
     }
   }
 
-  // 안전한 음성 출력 (카카오톡 에러 방지)
+  // 💡 [개선된 부분] 카카오톡 웹뷰 호환 TTS (Google Audio URL 활용)
   function speakText(text, callback) {
     try {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'ko-KR';
-        utterance.rate = 1.0;
-        if (callback) utterance.onend = callback;
-        window.speechSynthesis.speak(utterance);
-      } else if (callback) {
-        callback();
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
       }
+      // Google Translate TTS URL 활용
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=ko&client=tw-ob`;
+      currentAudio = new Audio(url);
+      
+      if (callback) {
+        currentAudio.onended = callback;
+        currentAudio.onerror = callback; // 오류 발생 시에도 진행
+      }
+      
+      currentAudio.play().catch(e => {
+        if (callback) callback();
+      });
     } catch(e) {
       if (callback) callback();
     }
   }
 
-  // 시계 소리
+  // 시계 소리 (Web Audio API)
   function playTickSound() {
     try {
       const ctx = getAudioContext();
@@ -151,7 +158,7 @@
     } catch(e) {}
   }
 
-  // 환호성 소리
+  // 환호성 소리 (Web Audio API)
   function playCheerSound() {
     try {
       const ctx = getAudioContext();
@@ -175,7 +182,6 @@
     } catch(e) {}
   }
 
-  // 카카오톡 웹뷰 호환 API 호출 함수
   async function getPokemonData(id) {
     const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
     const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
@@ -214,7 +220,10 @@
 
   async function loadQuiz() {
     stopTimer();
-    try { window.speechSynthesis.cancel(); } catch(e) {}
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
 
     document.getElementById('loading').style.display = 'block';
     document.getElementById('loading').innerText = "포켓몬 불러오는 중...";
@@ -231,7 +240,6 @@
     }
 
     try {
-      // 카카오톡 환경 안정성을 위한 순차 로딩 방식
       const pokemons = [];
       for (const id of randomIds) {
         const p = await getPokemonData(id);
@@ -253,7 +261,6 @@
       };
 
       imgElem.onerror = () => {
-        // 이미지 로딩 실패 시 자동 재시도
         setTimeout(loadQuiz, 500);
       };
 
@@ -269,7 +276,6 @@
       });
 
     } catch (err) {
-      // 통신 실패 시 재시도
       document.getElementById('loading').innerText = "다시 시도 중...";
       setTimeout(loadQuiz, 1000);
     }
@@ -286,7 +292,7 @@
       score += 10;
       document.getElementById('score').innerText = score;
       msgElem.style.color = '#2e7d32';
-      msgElem.innerText = "정답입니다! 역시 둥둥지 대단하군!! 🎉";
+      msgElem.innerText = "정답입니다! 🎉";
       
       playCheerSound();
       speakText("정답입니다!", () => {
@@ -294,7 +300,7 @@
       });
     } else {
       msgElem.style.color = '#c62828';
-      msgElem.innerText = `아니!! 둥둥지도 모르다니.. (정답: ${currentAnswer})`;
+      msgElem.innerText = `틀렸습니다! (정답: ${currentAnswer})`;
       
       speakText(`아쉬워요! 정답은 ${currentAnswer}입니다.`);
       document.getElementById('next-btn').style.display = 'block';
@@ -313,7 +319,7 @@
     document.getElementById('next-btn').style.display = 'block';
   }
 
-  // 사용자 첫 클릭 시 오디오 엔진 활성화
+  // 사용자 터치 연동 오디오 활성화
   document.addEventListener('touchstart', function initAudio() {
     getAudioContext();
     document.removeEventListener('touchstart', initAudio);
