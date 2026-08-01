@@ -24,6 +24,7 @@
       max-width: 400px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.1);
       text-align: center;
+      position: relative;
     }
     .top-bar {
       display: flex;
@@ -67,9 +68,47 @@
       font-weight: bold;
     }
     .loading { font-size: 1.1rem; color: #666; }
+
+    /* 카카오톡 안내 레이어 팝업 */
+    #kakaotalk-notice {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: #ffeb3b;
+      z-index: 99999;
+      color: #3c1e1e;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    #kakaotalk-notice .arrow {
+      position: absolute;
+      top: 10px;
+      right: 25px;
+      font-size: 36px;
+      animation: bounce 0.8s infinite alternate;
+    }
+    @keyframes bounce {
+      from { transform: translateY(0); }
+      to { transform: translateY(-12px); }
+    }
+    #kakaotalk-notice h2 { font-size: 1.5rem; margin-top: 40px; margin-bottom: 15px; }
+    #kakaotalk-notice p { font-size: 1.1rem; line-height: 1.6; word-break: keep-all; font-weight: 600; }
+    #kakaotalk-notice .sub-text { font-size: 0.95rem; color: #666; margin-top: 25px; font-weight: normal; }
   </style>
 </head>
 <body>
+
+<!-- 카카오톡 브라우저 우회 안내 레이어 팝업 -->
+<div id="kakaotalk-notice">
+  <div class="arrow">↗️</div>
+  <h2>크롬/사파리로 열어주세요!</h2>
+  <p>카카오톡 내부 화면에서는<br><b>음성 및 사운드가 지원되지 않습니다.</b></p>
+  <p class="sub-text">
+    우측 상단 <b>[⋮]</b> 또는 <b>[줄 3개]</b> 버튼을 누른 후<br>
+    <b>'다른 브라우저로 열기'</b>를 선택하시면<br>정상적으로 게임을 즐기실 수 있습니다!
+  </p>
+</div>
 
 <div class="card">
   <div class="top-bar">
@@ -89,17 +128,31 @@
 </div>
 
 <script>
+  // ------------------------------------------------------------------
+  // 🚨 카카오톡 인앱 브라우저 감지 및 전체 화면 안내
+  // ------------------------------------------------------------------
+  (function checkInAppBrowser() {
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.indexOf('kakaotalk') > -1) {
+      document.addEventListener('DOMContentLoaded', () => {
+        const notice = document.getElementById('kakaotalk-notice');
+        if (notice) notice.style.display = 'block';
+      });
+    }
+  })();
+
+  // ------------------------------------------------------------------
+  // 🎮 게임 변수
+  // ------------------------------------------------------------------
   let score = 0;
   let currentAnswer = "";
   let timerInterval = null;
   let timeLeft = 10;
   let audioCtx = null;
-  let currentAudio = null;
+  let isQuizLoading = false; // 중복 호출 방지 플래그
 
-  // 7세대(썬&문) 전국대도감 기준 802마리
   const MAX_POKEMON_ID = 802;
 
-  // 효과음용 Web Audio Context
   function getAudioContext() {
     try {
       if (!audioCtx) {
@@ -114,31 +167,39 @@
     }
   }
 
-  // 카카오톡 인앱 브라우저 대응 음성(TTS) 오디오 재생
+  // TTS 음성 출력
   function speakText(text, callback) {
     try {
-      if (currentAudio) {
-        currentAudio.pause();
-        currentAudio = null;
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ko-KR';
+        utterance.rate = 1.0;
+        
+        let called = false;
+        const safeCallback = () => {
+          if (!called && callback) {
+            called = true;
+            callback();
+          }
+        };
+
+        utterance.onend = safeCallback;
+        utterance.onerror = safeCallback;
+
+        window.speechSynthesis.speak(utterance);
+
+        // TTS 응답 없을 때를 대비한 타임아웃
+        setTimeout(safeCallback, 2000);
+      } else if (callback) {
+        callback();
       }
-      
-      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=ko&client=tw-ob`;
-      currentAudio = new Audio(url);
-      
-      if (callback) {
-        currentAudio.onended = callback;
-        currentAudio.onerror = callback; // 음성 재생 실패 시에도 게임 진행 보장
-      }
-      
-      currentAudio.play().catch(e => {
-        if (callback) callback();
-      });
     } catch(e) {
       if (callback) callback();
     }
   }
 
-  // 1초 단위 초시계 소리
+  // 타이머 소리
   function playTickSound() {
     try {
       const ctx = getAudioContext();
@@ -159,7 +220,7 @@
     } catch(e) {}
   }
 
-  // 정답 시 환호성 효과음
+  // 정답 환호성
   function playCheerSound() {
     try {
       const ctx = getAudioContext();
@@ -183,7 +244,6 @@
     } catch(e) {}
   }
 
-  // 포켓몬 데이터 API 요청
   async function getPokemonData(id) {
     const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
     const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
@@ -198,7 +258,6 @@
     };
   }
 
-  // 10초 타이머 시작
   function startTimer() {
     clearInterval(timerInterval);
     timeLeft = 10;
@@ -221,18 +280,20 @@
     clearInterval(timerInterval);
   }
 
-  // 문제 불러오기
+  // 💡 문제 로딩 함수 (중복 호출 및 8지선다 버그 완벽 수정)
   async function loadQuiz() {
+    if (isQuizLoading) return; // 이미 로딩 중이면 중복 실행 방지
+    isQuizLoading = true;
+
     stopTimer();
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio = null;
-    }
+    try { window.speechSynthesis.cancel(); } catch(e) {}
+
+    const optionsContainer = document.getElementById('options');
+    optionsContainer.innerHTML = ''; // 기존 버튼 즉시 초기화
 
     document.getElementById('loading').style.display = 'block';
     document.getElementById('loading').innerText = "포켓몬 불러오는 중...";
     document.getElementById('pokemon-img').style.display = 'none';
-    document.getElementById('options').innerHTML = '';
     document.getElementById('message').innerText = '';
     document.getElementById('next-btn').style.display = 'none';
     document.getElementById('timer').innerText = "10";
@@ -260,18 +321,19 @@
         document.getElementById('loading').style.display = 'none';
         imgElem.style.display = 'block';
 
-        // 이미지 로딩 완료 후 음성 안내 및 타이머 개시
         speakText("다음 포켓몬의 이름은 뭘까요?");
         startTimer();
+        isQuizLoading = false; // 로딩 완료
       };
 
       imgElem.onerror = () => {
+        isQuizLoading = false;
         setTimeout(loadQuiz, 500);
       };
 
       const shuffledOptions = [...pokemons].sort(() => Math.random() - 0.5);
-      const optionsContainer = document.getElementById('options');
       
+      optionsContainer.innerHTML = ''; // 생성 직전 2차 초기화
       shuffledOptions.forEach(p => {
         const btn = document.createElement('button');
         btn.className = 'opt-btn';
@@ -281,12 +343,12 @@
       });
 
     } catch (err) {
+      isQuizLoading = false;
       document.getElementById('loading').innerText = "다시 시도 중...";
       setTimeout(loadQuiz, 1000);
     }
   }
 
-  // 정답 확인
   function checkAnswer(selectedName) {
     stopTimer();
     const btns = document.querySelectorAll('.opt-btn');
@@ -298,11 +360,11 @@
       score += 10;
       document.getElementById('score').innerText = score;
       msgElem.style.color = '#2e7d32';
-      msgElem.innerText = "정답입니다! 역시 둥둥지군!! 🎉";
+      msgElem.innerText = "정답입니다! 역시 둥둥지군! 🎉";
       
       playCheerSound();
       speakText("정답입니다! 역시 둥둥지군!", () => {
-        setTimeout(loadQuiz, 1000);
+        setTimeout(loadQuiz, 800);
       });
     } else {
       msgElem.style.color = '#c62828';
@@ -313,7 +375,6 @@
     }
   }
 
-  // 시간 초과 처리
   function handleTimeout() {
     const btns = document.querySelectorAll('.opt-btn');
     btns.forEach(b => b.disabled = true);
@@ -326,7 +387,6 @@
     document.getElementById('next-btn').style.display = 'block';
   }
 
-  // 모바일 오디오 재생 제약 해제 (사용자 첫 화면 터치)
   document.addEventListener('touchstart', function initAudio() {
     getAudioContext();
     document.removeEventListener('touchstart', initAudio);
