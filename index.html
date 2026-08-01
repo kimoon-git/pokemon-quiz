@@ -99,6 +99,7 @@
   // 7세대(썬&문) 전국대도감 기준 802마리
   const MAX_POKEMON_ID = 802;
 
+  // 효과음용 Web Audio Context
   function getAudioContext() {
     try {
       if (!audioCtx) {
@@ -113,20 +114,20 @@
     }
   }
 
-  // 💡 [개선된 부분] 카카오톡 웹뷰 호환 TTS (Google Audio URL 활용)
+  // 카카오톡 인앱 브라우저 대응 음성(TTS) 오디오 재생
   function speakText(text, callback) {
     try {
       if (currentAudio) {
         currentAudio.pause();
         currentAudio = null;
       }
-      // Google Translate TTS URL 활용
+      
       const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=ko&client=tw-ob`;
       currentAudio = new Audio(url);
       
       if (callback) {
         currentAudio.onended = callback;
-        currentAudio.onerror = callback; // 오류 발생 시에도 진행
+        currentAudio.onerror = callback; // 음성 재생 실패 시에도 게임 진행 보장
       }
       
       currentAudio.play().catch(e => {
@@ -137,7 +138,7 @@
     }
   }
 
-  // 시계 소리 (Web Audio API)
+  // 1초 단위 초시계 소리
   function playTickSound() {
     try {
       const ctx = getAudioContext();
@@ -158,7 +159,7 @@
     } catch(e) {}
   }
 
-  // 환호성 소리 (Web Audio API)
+  // 정답 시 환호성 효과음
   function playCheerSound() {
     try {
       const ctx = getAudioContext();
@@ -182,6 +183,7 @@
     } catch(e) {}
   }
 
+  // 포켓몬 데이터 API 요청
   async function getPokemonData(id) {
     const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
     const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
@@ -196,6 +198,7 @@
     };
   }
 
+  // 10초 타이머 시작
   function startTimer() {
     clearInterval(timerInterval);
     timeLeft = 10;
@@ -218,6 +221,7 @@
     clearInterval(timerInterval);
   }
 
+  // 문제 불러오기
   async function loadQuiz() {
     stopTimer();
     if (currentAudio) {
@@ -256,6 +260,7 @@
         document.getElementById('loading').style.display = 'none';
         imgElem.style.display = 'block';
 
+        // 이미지 로딩 완료 후 음성 안내 및 타이머 개시
         speakText("다음 포켓몬의 이름은 뭘까요?");
         startTimer();
       };
@@ -281,6 +286,7 @@
     }
   }
 
+  // 정답 확인
   function checkAnswer(selectedName) {
     stopTimer();
     const btns = document.querySelectorAll('.opt-btn');
@@ -292,7 +298,7 @@
       score += 10;
       document.getElementById('score').innerText = score;
       msgElem.style.color = '#2e7d32';
-      msgElem.innerText = "정답입니다! 역시 둥둥지군!!";
+      msgElem.innerText = "정답입니다! 역시 둥둥지군!! 🎉";
       
       playCheerSound();
       speakText("정답입니다! 역시 둥둥지군!", () => {
@@ -300,13 +306,14 @@
       });
     } else {
       msgElem.style.color = '#c62828';
-      msgElem.innerText = `아니! 둥둥지도 모르다니!! (정답: ${currentAnswer})`;
+      msgElem.innerText = `아니! 둥둥지도 모르다니! (정답: ${currentAnswer})`;
       
       speakText(`아쉬워요! 정답은 ${currentAnswer}입니다.`);
       document.getElementById('next-btn').style.display = 'block';
     }
   }
 
+  // 시간 초과 처리
   function handleTimeout() {
     const btns = document.querySelectorAll('.opt-btn');
     btns.forEach(b => b.disabled = true);
@@ -319,7 +326,7 @@
     document.getElementById('next-btn').style.display = 'block';
   }
 
-  // 사용자 터치 연동 오디오 활성화
+  // 모바일 오디오 재생 제약 해제 (사용자 첫 화면 터치)
   document.addEventListener('touchstart', function initAudio() {
     getAudioContext();
     document.removeEventListener('touchstart', initAudio);
